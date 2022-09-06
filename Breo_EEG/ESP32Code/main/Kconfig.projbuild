@@ -1,0 +1,49 @@
+menu "EEG Project Configuration"
+
+    config EXAMPLE_CONNECT_WIFI
+        bool "connect using WiFi interface"
+        default y
+        help
+            Protocol examples can use Wi-Fi and/or Ethernet to connect to the network.
+            Choose this option to connect with WiFi
+
+    if EXAMPLE_CONNECT_WIFI
+        config EXAMPLE_WIFI_SSID
+            string "WiFi SSID"
+            default "myssid"
+            help
+                SSID (network name) for the example to connect to.
+
+        config EXAMPLE_WIFI_PASSWORD
+            string "WiFi Password"
+            default "mypass"
+            help
+                WiFi password (WPA or WPA2) for the example to use.
+                Can be left blank if the network has no security set.    
+    endif
+
+    config ESP_MAXIMUM_RETRY
+    	int "Maximum retry"
+    	default 5
+    	help
+        	Set the Maximum retry to avoid station reconnecting to the AP unlimited when the AP is really inexistent.
+
+    config WAKE_UP_TIME_SEC
+        int "wake-up time sec"
+        default 10
+        help
+            set wake-up time sec.
+
+    config I2C_MASTER_SCL
+    	int "SCL GPIO Num"
+    	default 19 if IDF_TARGET_ESP32S3
+    	help
+    		GPIO number for I2C Master clock line.
+
+   config I2C_MASTER_SDA
+   		int "SDA GPIO Num"
+   		default 18 if IDF_TARGET_ESP32S3
+   		help
+   			GPIO number for I2C Master data line.
+
+endmenu
