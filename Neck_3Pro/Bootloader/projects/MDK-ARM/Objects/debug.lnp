@@ -1,0 +1,18 @@
+--cpu=Cortex-M4.fp.sp
+".\objects\startup_n32l40x.o"
+".\objects\system_n32l40x.o"
+".\objects\main.o"
+".\objects\n32l40x_it.o"
+".\objects\dcd_user.o"
+".\objects\dcd_port.o"
+".\objects\af_utils.o"
+".\objects\af_port.o"
+".\objects\iap.o"
+".\objects\n32l40x_rcc.o"
+".\objects\n32l40x_usart.o"
+".\objects\n32l40x_flash.o"
+".\objects\n32l40x_gpio.o"
+--library_type=microlib --strict --scatter ".\Objects\debug.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list ".\Listings\debug.map" -o .\Objects\debug.axf

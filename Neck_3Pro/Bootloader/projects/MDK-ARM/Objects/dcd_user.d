@@ -1,0 +1,10 @@
+.\objects\dcd_user.o: ..\user\dcd_user.c
+.\objects\dcd_user.o: ..\user\dcd_user.h
+.\objects\dcd_user.o: C:\Software\MDK\ARM\ARMCC\Bin\..\include\stdio.h
+.\objects\dcd_user.o: C:\Software\MDK\ARM\ARMCC\Bin\..\include\string.h
+.\objects\dcd_user.o: C:\Software\MDK\ARM\ARMCC\Bin\..\include\stdlib.h
+.\objects\dcd_user.o: ..\user\af_utils.h
+.\objects\dcd_user.o: C:\Software\MDK\ARM\ARMCC\Bin\..\include\stdint.h
+.\objects\dcd_user.o: C:\Software\MDK\ARM\ARMCC\Bin\..\include\stddef.h
+.\objects\dcd_user.o: ..\user\dcd_cfg.h
+.\objects\dcd_user.o: ..\user\iap_addr_def.h

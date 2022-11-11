@@ -1,0 +1,64 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Tool Versions:</h2>
+IDE-Version: ¦ÌVision V5.36.0.0
+Copyright (C) 2021 ARM Ltd and ARM Germany GmbH. All rights reserved.
+License Information: sam sam, sam, LIC=AK1BF-6IGZ9-243SS-LK10F-21WVB-ZCPE9
+ 
+Tool Versions:
+Toolchain:       MDK-ARM Professional  Version: 5.36.0.0
+Toolchain Path:  C:\Software\MDK\ARM\ARMCC\Bin
+C Compiler:      Armcc.exe V5.06 update 7 (build 960)
+Assembler:       Armasm.exe V5.06 update 7 (build 960)
+Linker/Locator:  ArmLink.exe V5.06 update 7 (build 960)
+Library Manager: ArmAr.exe V5.06 update 7 (build 960)
+Hex Converter:   FromElf.exe V5.06 update 7 (build 960)
+CPU DLL:         SARMCM3.DLL V5.36.0.0
+Dialog DLL:      DCM.DLL V1.17.3.0
+Target DLL:      Segger\JL2CM3.dll V2.99.40.0
+Dialog DLL:      TCM.DLL V1.53.0.0
+ 
+<h2>Project:</h2>
+C:\Users\804397\Desktop\iNeck3Pro_boot\projects\MDK-ARM\bootloader.uvprojx
+Project File Date:  10/24/2022
+
+<h2>Output:</h2>
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'C:\Software\MDK\ARM\ARMCC\Bin'
+Build target 'n32l40x'
+compiling main.c...
+compiling dcd_user.c...
+..\user\dcd_user.c(238): warning:  #940-D: missing return statement at end of non-void function "GPIO_CFG_CpltCallback" 
+  }
+..\user\dcd_user.c(242): warning:  #940-D: missing return statement at end of non-void function "RCC_CFG_CpltCallback" 
+  }
+..\user\dcd_user.c: 2 warnings, 0 errors
+compiling dcd_port.c...
+..\user\dcd_port.c(83): warning:  #550-D: variable "ret"  was set but never used
+        int ret = 0;
+..\user\dcd_port.c: 1 warning, 0 errors
+compiling af_port.c...
+linking...
+Program Size: Code=3960 RO-data=1476 RW-data=40 ZI-data=8192  
+FromELF: creating hex file...
+.\Objects\debug.hex: Error: Q0108E: Could not create output file '.\Objects\debug.hex': Permission denied
+Finished: 0 information, 0 warning and 1 error messages.
+After Build - User command #1: fromelf --bin --output=.\bin\bootloader.bin .\Objects\debug.axf
+".\Objects\debug.axf" - 0 Error(s), 3 Warning(s).
+
+<h2>Software Packages used:</h2>
+
+Package Vendor: Nationstech
+                http://www.keil.com/pack/Nationstech.N32L40x_DFP.0.1.0.pack
+                Nationstech.N32L40x_DFP.0.1.0
+                Nationstech N32L40x Series Device Support, Drivers and Examples
+
+<h2>Collection of Component include folders:</h2>
+  C:\Users\804397\AppData\Local\Arm\Packs\Nationstech\N32L40x_DFP\0.1.0\firmware\CMSIS\device
+
+<h2>Collection of Component Files used:</h2>
+Build Time Elapsed:  00:00:05
+</pre>
+</body>
+</html>
