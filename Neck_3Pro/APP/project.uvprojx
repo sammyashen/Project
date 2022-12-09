@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_STDPERIPH_DRIVER,N32L40X</Define>
               <Undefine></Undefine>
-              <IncludePath>.\Libraries\core;.\Libraries\device;.\Libraries\inc;.\Device;.\Drivers;.\User;.\Components\letter_shell\port;.\Components\letter_shell\src;.\Components\breo_iap</IncludePath>
+              <IncludePath>.\Libraries\core;.\Libraries\device;.\Libraries\inc;.\Device;.\Drivers;.\User;.\Components\letter_shell\port;.\Components\letter_shell\src;.\Components\breo_iap;.\Components\cm_backtrace;.\Components\cm_backtrace\Languages\en-US;.\Components\cm_backtrace\Languages\zh-CN</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -404,14 +404,14 @@
               <FilePath>.\User\pid.c</FilePath>
             </File>
             <File>
-              <FileName>mass.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\User\mass.c</FilePath>
-            </File>
-            <File>
               <FileName>topic.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\User\topic.c</FilePath>
+            </File>
+            <File>
+              <FileName>mass.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\User\mass.c</FilePath>
             </File>
             <File>
               <FileName>tiny_os.c</FileName>

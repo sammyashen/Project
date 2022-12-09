@@ -194,6 +194,16 @@
           <WinNumber>1</WinNumber>
           <ItemText>heat_ladrc</ItemText>
         </Ww>
+        <Ww>
+          <count>9</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>ble_fsm</ItemText>
+        </Ww>
+        <Ww>
+          <count>10</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>s_uart1_tx_buf</ItemText>
+        </Ww>
       </WatchWindow1>
       <Tracepoint>
         <THDelay>0</THDelay>
@@ -311,8 +321,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\User\mass.c</PathWithFileName>
-      <FilenameWithoutPath>mass.c</FilenameWithoutPath>
+      <PathWithFileName>.\User\topic.c</PathWithFileName>
+      <FilenameWithoutPath>topic.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
@@ -323,8 +333,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>.\User\topic.c</PathWithFileName>
-      <FilenameWithoutPath>topic.c</FilenameWithoutPath>
+      <PathWithFileName>.\User\mass.c</PathWithFileName>
+      <FilenameWithoutPath>mass.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

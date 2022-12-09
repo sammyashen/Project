@@ -23,17 +23,6 @@ static struct state mass_idle = {
 	.transition_nums = 1,
 };
 
-//static void mass_start_entery(void *state_data, struct event *event)
-//{
-//	uint32_t evt = 0;
-//	
-//	//开启M1、M2按摩
-//	if(iNeck_3Pro.mass_motor1_dir == MASS_FORWARD)		evt |= EVT_0;
-//	else												evt |= EVT_2;
-//	if(iNeck_3Pro.mass_motor2_dir == MASS_FORWARD)		evt |= EVT_5;
-//	else												evt |= EVT_3;
-//	Topic_Pushlish(MOTOR_TOPIC, &evt);
-//}
 static void mass_start_process(void *oldstate_data, struct event *event, void *state_new_data)
 {
 	uint32_t evt = 0;
@@ -48,13 +37,11 @@ static void mass_start_process(void *oldstate_data, struct event *event, void *s
 		//停止M3
 		tiny_set_event(&mass_fsm_task, EVT_3);
 		evt |= EVT_7;
-//		Topic_Pushlish(MOTOR_TOPIC, &(uint32_t){EVT_7});
 	}
 	else{
 		//开启M3后移
 		iNeck_3Pro.mass_motor3_dir = MASS_REVERSE;
 		evt |= EVT_8;
-//		Topic_Pushlish(MOTOR_TOPIC, &(uint32_t){EVT_8});
 	}
 	Topic_Pushlish(MOTOR_TOPIC, &evt);
 }
@@ -63,8 +50,9 @@ static struct state mass_start = {
 		{MASS_EVT, (void *)"hold", mass_evt_compare, &mass_start_process, &mass_start},   
 		{MASS_EVT, (void *)"change", mass_evt_compare, NULL, &mass_work}, 
 		{MASS_EVT, (void *)"stop", mass_evt_compare, NULL, &mass_stop},
+		{MASS_EVT, (void *)"block", mass_evt_compare, NULL, &work_normal_forward},
 	},
-	.transition_nums = 3,
+	.transition_nums = 4,
 //	.action_entry = &mass_start_entery,
 };
 
@@ -169,7 +157,7 @@ static void work_normal_forward_process(void *oldstate_data, struct event *event
 	}
 	else{
 		//启动M3前移
-		if(iNeck_3Pro.is_travel == SET || iNeck_3Pro.is_manual_tra == SET){
+		if(iNeck_3Pro.is_travel == SET){
 			iNeck_3Pro.mass_motor3_dir = MASS_FORWARD;
 			evt |= EVT_6;
 		}else{
@@ -184,8 +172,9 @@ static struct state work_normal_forward = {
 	.transitions = (struct transition[]){
 		{MASS_EVT, (void *)"hold", mass_evt_compare, &work_normal_forward_process, &work_normal_forward},	
 		{MASS_EVT, (void *)"change", mass_evt_compare, NULL, &work_normal_reverse},
+		{MASS_EVT, (void *)"block", mass_evt_compare, NULL, &work_normal_reverse},
 	},
-	.transition_nums = 2,
+	.transition_nums = 3,
 };
 
 static void work_normal_reverse_process(void *oldstate_data, struct event *event, void *state_new_data)
@@ -218,7 +207,7 @@ static void work_normal_reverse_process(void *oldstate_data, struct event *event
 	}
 	else{
 		//启动M3后移
-		if(iNeck_3Pro.is_travel == SET || iNeck_3Pro.is_manual_tra == SET){
+		if(iNeck_3Pro.is_travel == SET){
 			iNeck_3Pro.mass_motor3_dir = MASS_REVERSE;
 			evt |= EVT_8;
 		}else{
@@ -233,8 +222,9 @@ static struct state work_normal_reverse = {
 	.transitions = (struct transition[]){
 		{MASS_EVT, (void *)"hold", mass_evt_compare, &work_normal_reverse_process, &work_normal_reverse},	
 		{MASS_EVT, (void *)"change", mass_evt_compare, NULL, &work_normal_hold},
+		{MASS_EVT, (void *)"block", mass_evt_compare, NULL, &work_normal_forward},
 	},
-	.transition_nums = 2,
+	.transition_nums = 3,
 };
 
 static struct state mass_work_aging = {		
@@ -259,8 +249,14 @@ static void work_aging_idle_process(void *oldstate_data, struct event *event, vo
 			_aging_time_cnt = 0;
 			if(++iNeck_3Pro.aging_cnt < 5)
 				tiny_set_event(&mass_fsm_task, EVT_3);
-			else
+			else{
 				iNeck_3Pro.aging_cnt = 5;
+				if(iNeck_3Pro.dev_status != AGINGDONE){
+					iNeck_3Pro.dev_status = AGINGDONE;
+					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_3|EVT_7});
+//					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});
+				}
+			}
 		}
 	}
 }
@@ -280,10 +276,6 @@ static struct state work_aging_idle = {
 	.action_exit  = &work_aging_idle_exit,
 };
 
-//static void mass_stop_entery(void *state_data, struct event *event)
-//{
-//	iNeck_3Pro.dev_status = STOPPING;
-//}
 static void mass_stop_process(void *oldstate_data, struct event *event, void *state_new_data)
 {
 	uint32_t evt = 0;
@@ -297,8 +289,10 @@ static void mass_stop_process(void *oldstate_data, struct event *event, void *st
 		//停止M3
 		evt |= EVT_7;
 		if(iNeck_3Pro.dev_status != SLEEP){
-			iNeck_3Pro.dev_status = SLEEP;
-			tiny_set_event(&mass_fsm_task, EVT_3);
+			if(DC_INPUT_DETECT == SET)		iNeck_3Pro.dev_status = CHARGING;
+			else							iNeck_3Pro.dev_status = SLEEP;
+//			tiny_set_event(&mass_fsm_task, EVT_3);
+			MCU_PWR_DISABLE;
 		}
 	}
 	else{
@@ -350,7 +344,7 @@ static void mass_task_cb(void *para, uint32_t evt)
 	//堵转处理
 	if(ADC_GetSample(M1VAL_SAMPLE) > 140){
 		fliter_cnt[0]++;
-		if(fliter_cnt[0] >= 10){
+		if(fliter_cnt[0] >= 20){
 			fliter_cnt[0] = 0;
 			iNeck_3Pro.block_cnt++;
 			if(iNeck_3Pro.mass_motor1_dir == MASS_FORWARD){
@@ -365,7 +359,7 @@ static void mass_task_cb(void *para, uint32_t evt)
 	}
 	if(ADC_GetSample(M2VAL_SAMPLE) > 140){
 		fliter_cnt[1]++;
-		if(fliter_cnt[1] >= 10){
+		if(fliter_cnt[1] >= 20){
 			fliter_cnt[1] = 0;
 			iNeck_3Pro.block_cnt++;
 			if(iNeck_3Pro.mass_motor2_dir == MASS_FORWARD){
@@ -378,25 +372,18 @@ static void mass_task_cb(void *para, uint32_t evt)
 	}else{
 		fliter_cnt[1] = 0;
 	}
-	if(ADC_GetSample(M3VAL_SAMPLE) > 140){
+	if(ADC_GetSample(M3VAL_SAMPLE) > 200){
 		fliter_cnt[2]++;
-		if(fliter_cnt[2] >= 10){
+		if(fliter_cnt[2] >= 20){
 			fliter_cnt[2] = 0;
 			iNeck_3Pro.block_cnt++;
-			tiny_set_event(&mass_fsm_task, EVT_3);//跳过当前状态即可
+			tiny_set_event(&mass_fsm_task, EVT_5);
 		}
 	}else{
 		fliter_cnt[2] = 0;
 	}
 	
 	tiny_set_event(&mass_fsm_task, EVT_2);
-
-//	if(mass_fsm.state_current == (&mass_start))
-//		tiny_printf("mass fsm:mass_start\r\n");
-//	else if(mass_fsm.state_current->state_parent == (&mass_work_normal))
-//		tiny_printf("mass fsm:mass_work\r\n");
-//	else if(mass_fsm.state_current == (&mass_stop))
-//		tiny_printf("mass fsm:mass_stop\r\n");
 }
 
 /*
@@ -405,6 +392,7 @@ static void mass_task_cb(void *para, uint32_t evt)
 *EVT_2: send "hold"
 *EVT_3: send "change"
 *EVT_4: send "free"
+*EVT_5: send "block"
 */
 static void mass_fsm_task_cb(void *para, uint32_t evt)
 {
@@ -428,6 +416,10 @@ static void mass_fsm_task_cb(void *para, uint32_t evt)
 		tiny_clr_event(&mass_fsm_task, EVT_4);
 		statem_handle_event(&mass_fsm, &(struct event){MASS_EVT, (void *)"free"});
 	}
+	if(evt & EVT_5){
+		tiny_clr_event(&mass_fsm_task, EVT_5);
+		statem_handle_event(&mass_fsm, &(struct event){MASS_EVT, (void *)"block"});
+	}
 }
 
 static void mass_process_cb(void *msg)
@@ -437,6 +429,13 @@ static void mass_process_cb(void *msg)
 	tiny_set_event(&mass_task, *evt);
 }
 
+static void mode_change_cb(void *msg)
+{
+	if(mass_fsm.state_current == (&work_normal_hold)){
+		tiny_set_event(&mass_fsm_task, EVT_3);
+	}
+}
+
 static void mass_mode_init(void)
 {
 	tiny_timer_create(&mass_task, mass_task_cb, NULL);
@@ -444,6 +443,7 @@ static void mass_mode_init(void)
 	tiny_task_create(&mass_fsm_task, mass_fsm_task_cb, NULL);
 
 	Topic_Subscrib(MASS_TOPIC, mass_process_cb);
+	Topic_Subscrib(CHANGE_TOPIC, mode_change_cb);
 
 	statem_init(&mass_fsm, &mass_idle, &mass_error);
 }

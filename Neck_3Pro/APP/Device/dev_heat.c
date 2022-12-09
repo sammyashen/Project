@@ -1,6 +1,6 @@
 #include "dev_heat.h"
 
-const uint16_t temperature_adc[1] = {1550};//43¡æ
+const uint16_t temperature_adc[1] = {1500};//43¡æ
 
 static task_t heat_task;
 static pid_t heat_pid = {
@@ -30,19 +30,16 @@ static void heat_task_cb(void *para, uint32_t evt)
 		if(iNeck_3Pro.heat_level == HEAT_WARM)		iNeck_3Pro.heat_level = HEAT_NONE;
 	}
 
-//	tiny_printf("M1:%d,M2:%d,M3:%d\r\n", ADC_GetSample(M1VAL_SAMPLE), ADC_GetSample(M2VAL_SAMPLE), ADC_GetSample(M3VAL_SAMPLE));
 	if(iNeck_3Pro.heat_level == HEAT_WARM){
 		heat_pid.Sv = temperature_adc[0];
 		heat_pid.Pv = ADC_GetSample(NTC_SAMPLE);
 		if(heat_pid.Pv > 3800 || heat_pid.Pv < 400)		iNeck_3Pro.heat_level = HEAT_NONE;
 		pid_calc(&heat_pid);
 		bsp_SetTIMOutPWM(GPIOA, GPIO_PIN_6, GPIO_AF2_TIM3, TIM3, TIM_CH_1, 5, (heat_pid.OUT * 100));
-//		tiny_printf("pid.Pv:%d,pwm:%d\r\n", (uint16_t)heat_pid.Pv, (uint8_t)heat_pid.OUT);
 	}else{
 		heat_pid.SEk = 0;
 		heat_pid.Pv_1 = 0;
 		bsp_SetTIMOutPWM(GPIOA, GPIO_PIN_6, GPIO_AF2_TIM3, TIM3, TIM_CH_1, 5, 0);
-//		tiny_printf("heat disable\r\n");
 	}
 }
 

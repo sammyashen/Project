@@ -14,6 +14,7 @@
 #include "iap.h"
 #include "bsp.h"
 #include "debug.h"
+//#include "cm_backtrace.h"
 
 #include "drv_adc.h"
 #include "drv_gpio.h"
@@ -32,6 +33,11 @@
 #define BYTE2(dwTemp)	(*((uint8_t *)(&dwTemp) + 2))
 #define BYTE3(dwTemp)	(*((uint8_t *)(&dwTemp) + 3))
 
+//temperature
+#define TEMP_60			1150
+#define TEMP_45			1500
+#define TEMP_43			1550
+
 //topic 
 #define BUZZER_TOPIC	0x01
 #define LED_TOPIC		0x02
@@ -39,6 +45,7 @@
 #define MOTOR_TOPIC		0x04
 #define BLE_TOPIC		0x05
 #define MASS_TOPIC		0x06
+#define CHANGE_TOPIC	0x07
 
 //mass mode
 #define MASS_MODE			0x00
@@ -63,6 +70,7 @@
 #define CHARGDONE		0x04
 #define DEV_ERROR		0x05
 #define STOPPING		0x06
+#define AGINGDONE		0x07
 
 //ble status
 #define DISCONNECTED	0x00
@@ -71,6 +79,9 @@
 //heat level
 #define HEAT_NONE		0x00
 #define HEAT_WARM		0x01
+
+//heart cnt
+#define HEART_CNT		0x05
 
 typedef struct{
 	uint8_t dev_status;
@@ -101,7 +112,11 @@ typedef struct{
 
 	FlagStatus is_manual_tra;
 
-	uint8_t reserve[3];
+	FlagStatus is_handshake;
+
+	uint8_t heart_cnt;
+
+	uint8_t reserve[1];
 }__attribute__((packed, aligned(4))) ineck_3pro_t;
 extern volatile ineck_3pro_t iNeck_3Pro;
 

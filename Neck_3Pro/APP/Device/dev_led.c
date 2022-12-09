@@ -77,11 +77,13 @@ static task_t led_task;
 *EVT_0：打开状态灯
 *EVT_1：充电、低压
 *EVT_2：关闭状态灯
-*EVT_3：充满、老化
+*EVT_3：充满
 *EVT_4：BLE断开连接
 *EVT_5：BLE建立连接
 *EVT_6：打开BLE灯
 *EVT_7: 关闭BLE灯
+*EVT_8: 老化
+*EVT_9: 低压关机1Hz快闪
 */
 static void led_task_cb(void *para, uint32_t evt)
 {
@@ -90,32 +92,34 @@ static void led_task_cb(void *para, uint32_t evt)
 	static FlagStatus blink_flag = RESET;
 	static FlagStatus ble_fast_blink_flag = RESET;
 	static FlagStatus ble_on = RESET;
+	static uint8_t blink_target = 10;
 
 	ble_led_process();
 
 	if(evt & EVT_0){
 		tiny_clr_event(&led_task, EVT_0);
 		if(RED_LED_DECTECT == SET)		RED_LED_ON;
-		if(GREEN_LED_DECTECT == RESET)	GREEN_LED_OFF;
+		if(GREEN_LED_DECTECT == SET)	GREEN_LED_OFF;
 		if(blink_flag == SET)			blink_flag = RESET;
 	}
 
 	if(evt & EVT_1){
 		tiny_clr_event(&led_task, EVT_1);
 		if(blink_flag == RESET)			blink_flag = SET;
+		blink_target = 10;
 	}
 
 	if(evt & EVT_2){
 		tiny_clr_event(&led_task, EVT_2);
 		if(RED_LED_DECTECT == RESET)	RED_LED_OFF;
-		if(GREEN_LED_DECTECT == RESET)	GREEN_LED_OFF;
+		if(GREEN_LED_DECTECT == SET)	GREEN_LED_OFF;
 		if(blink_flag == SET)			blink_flag = RESET;
 	}
 
 	if(evt & EVT_3){
 		tiny_clr_event(&led_task, EVT_3);
 		if(RED_LED_DECTECT == RESET)	RED_LED_OFF;
-		if(GREEN_LED_DECTECT == SET)	GREEN_LED_ON;
+		if(GREEN_LED_DECTECT == RESET)	GREEN_LED_ON;
 		if(blink_flag == SET)			blink_flag = RESET;
 	}
 
@@ -139,11 +143,37 @@ static void led_task_cb(void *para, uint32_t evt)
 		if(ble_on == SET)		ble_on = RESET;
 	}
 
+	if(evt & EVT_8){
+		tiny_clr_event(&led_task, EVT_8);
+		if(RED_LED_DECTECT == RESET)	RED_LED_OFF;
+		if(GREEN_LED_DECTECT == RESET)	GREEN_LED_ON;
+		if(blink_flag == RESET)			blink_flag = SET;
+	}
+
+	if(evt & EVT_9){
+		tiny_clr_event(&led_task, EVT_9);
+		if(blink_flag == RESET)			blink_flag = SET;
+		blink_target = 5;
+	}
+
 	if(blink_flag){
-		if(++cnt >= 10){
-			cnt = 0;
-			RED_LED_REV;
-			GREEN_LED_OFF;
+		if(iNeck_3Pro.is_aging == RESET){
+			if(++cnt >= blink_target){
+				cnt = 0;
+				RED_LED_REV;
+				GREEN_LED_OFF;
+			}
+		}else{
+			if(++cnt >= 5){
+				cnt = 0;
+				if(GREEN_LED_DECTECT == RESET){
+					RED_LED_OFF;
+					GREEN_LED_ON;
+				}else{
+					RED_LED_ON;
+					GREEN_LED_OFF;
+				}
+			}
 		}
 	}
 	else{
@@ -151,14 +181,14 @@ static void led_task_cb(void *para, uint32_t evt)
 	}
 
 	if(ble_fast_blink_flag){
-		if(++ble_cnt >= 20){
+		if(++ble_cnt >= 10){
 			ble_cnt = 0;
 			if(ble_on)
 				ble_led_start(1, 1, 2);
 		}
 	}
 	else{
-		if(++ble_cnt >= 40){
+		if(++ble_cnt >= 20){
 			ble_cnt = 0;
 			if(ble_on)
 				ble_led_start(1, 1, 1);

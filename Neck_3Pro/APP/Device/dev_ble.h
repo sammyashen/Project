@@ -9,7 +9,7 @@
 #define FRAME_HEAD		0x4E
 #define FRAME_TAIL		0x4E
 #define VERSION			0x01
-#define DEVICE			0x12
+#define DEVICE			0x13
 
 //frame err
 #define NO_ERR			0x00

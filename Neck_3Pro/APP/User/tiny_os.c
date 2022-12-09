@@ -69,7 +69,7 @@ void tiny_task_loop(void)
     uint32_t events =0;
     task_t *cur,*n=NULL ;
     OS_CPU_SR cpu_sr;
-    bool busy = 0;
+    bool busy = TASK_IDLE;
     
     list_for_each_safe(cur,n,&task_list)
     {
@@ -98,14 +98,13 @@ void tiny_task_loop(void)
                 }
                 cur->func(cur->user,events);
             }
-            busy|=cur->is_busy;
+            busy |= cur->is_busy;
             if(TASK_TIMER == cur->is_task)
             {
                 enter_critical();
                 cur->is_run = false;
                 exit_critical();
             }
-
         }
     }
     if(!busy)

@@ -1,6 +1,6 @@
 #include "include.h"
 
-#define SOFTWARE_VERSION		"1.0"
+#define SOFTWARE_VERSION		"iNeck3Pro_A1.02"
 
 volatile ineck_3pro_t iNeck_3Pro = {
 	.dev_status 	= SLEEP,
@@ -28,6 +28,10 @@ volatile ineck_3pro_t iNeck_3Pro = {
 	.aging_cnt		= 0,
 
 	.is_manual_tra  = RESET,
+
+	.is_handshake	= RESET,
+
+	.heart_cnt    	= 0,
 };
 
 extern void user_shell_task(void);
@@ -37,6 +41,8 @@ static void app_task_cb(void *para, uint32_t evt)
 	static uint8_t _10sec_cnt = 0;
 	static uint8_t _7sec_cnt = 0;
 	static uint8_t chardone_cnt = 0;
+	static uint8_t _4sec_cnt = 0;
+	static FlagStatus is_low_pwr_en = RESET;
 	static FlagStatus is_charge_en = RESET;
 	uint8_t keycode = KEY_NONE;
 
@@ -46,8 +52,6 @@ static void app_task_cb(void *para, uint32_t evt)
 		IWDG_ReloadKey();
 		if(++_7sec_cnt >= 7)
 			_7sec_cnt = 7;
-
-//		tiny_printf("bat1:%d,bat2:%d\r\n", iNeck_3Pro.bat1_level, iNeck_3Pro.bat2_level);
 		
 		if(iNeck_3Pro.block_cnt != 0){
 			if(++_10sec_cnt >= 10){
@@ -60,24 +64,36 @@ static void app_task_cb(void *para, uint32_t evt)
 		if(iNeck_3Pro.block_cnt >= 3 && _10sec_cnt < 10){		//10s内连续堵转处理
 			iNeck_3Pro.block_cnt = 0;
 			_10sec_cnt = 0;
-//			Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
 			Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
 			Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
 			Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
 			Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_2|EVT_7});//关闭LED
 		}
+
+		if(++iNeck_3Pro.heart_cnt >= HEART_CNT){
+			iNeck_3Pro.heart_cnt = 0;
+			if(iNeck_3Pro.is_handshake == SET){
+				Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_2});//上传心跳包
+			}
+		}
+
+		if(is_low_pwr_en){
+			if(++_4sec_cnt == 4){
+				Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
+				Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
+				Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
+				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_2|EVT_7});//关闭LED
+			}
+		}else{
+			_4sec_cnt = 0;
+		}
 		
 		if(iNeck_3Pro.mass_remain > 0){
 			iNeck_3Pro.mass_remain--;
-			if(iNeck_3Pro.ble_status == CONNECTED){
-				Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_2});//上传心跳包
-			}
 		}
 		else{
 			if(iNeck_3Pro.is_aging == RESET){					//正常工作下
 				if(iNeck_3Pro.dev_status == WORK || iNeck_3Pro.dev_status == LOW_PWR){
-//					iNeck_3Pro.dev_status = SLEEP;
-//					Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
 					Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
 					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
 					Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
@@ -92,18 +108,18 @@ static void app_task_cb(void *para, uint32_t evt)
 
 	//充电及电量检测
 	if(DC_INPUT_DETECT == SET){
-		if(ADC_GetSample(BAT1TEMP_SAMPLE) > 1500 && ADC_GetSample(BAT2TEMP_SAMPLE) > 1500){	//<45℃
+		if(ADC_GetSample(BAT1TEMP_SAMPLE) > TEMP_43 && ADC_GetSample(BAT2TEMP_SAMPLE) > TEMP_43){	//<43℃
 			if(is_charge_en == RESET){
 				is_charge_en = SET;
 				enable_charge();
+				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_1});
 			}
-//			CHARGE_ENABLE;
-		}else{
+		}else if(ADC_GetSample(BAT1TEMP_SAMPLE) < TEMP_45 || ADC_GetSample(BAT2TEMP_SAMPLE) < TEMP_45){		//>45℃
 			if(is_charge_en == SET){
 				is_charge_en = RESET;
 				disable_charge();
+				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_0});
 			}
-//			CHARGE_DISABLE;
 		}
 	
 		if(iNeck_3Pro.is_aging == RESET){
@@ -111,16 +127,16 @@ static void app_task_cb(void *para, uint32_t evt)
 			if(iNeck_3Pro.dev_status == SLEEP || iNeck_3Pro.dev_status == WORK || iNeck_3Pro.dev_status == LOW_PWR){
 				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_1|EVT_7});//关闭LED
 				Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
-//				Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
 				Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
-				if(iNeck_3Pro.dev_status != SLEEP)		Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
+				Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
 				iNeck_3Pro.dev_status = CHARGING;
+				is_low_pwr_en = RESET;
 			}
 			//充满判断
 			if(CHARGE_VER_DETECT == RESET && is_charge_en == SET){
 				if(++chardone_cnt >= 50){
 					chardone_cnt = 0;
-					if(iNeck_3Pro.dev_status == CHARGING){
+					if(iNeck_3Pro.dev_status != CHARGDONE){
 						iNeck_3Pro.dev_status = CHARGDONE;
 						Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_3|EVT_7});
 					}
@@ -131,13 +147,11 @@ static void app_task_cb(void *para, uint32_t evt)
 		}
 	}else{
 		if(iNeck_3Pro.dev_status == CHARGING || iNeck_3Pro.dev_status == CHARGDONE){
-//			iNeck_3Pro.dev_status = SLEEP;
-//			Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
 			Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
 			Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
 			Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_2|EVT_7});//关闭LED
 		}
-	
+
 		if(ADC_GetSample(BAT1VAL_SAMPLE) > 2470)		{if(iNeck_3Pro.bat1_level >= 5)		iNeck_3Pro.bat1_level = 5;}	//3.98V
 		else if(ADC_GetSample(BAT1VAL_SAMPLE) > 2400)	{if(iNeck_3Pro.bat1_level >= 4)		iNeck_3Pro.bat1_level = 4;}	//3.87V
 		else if(ADC_GetSample(BAT1VAL_SAMPLE) > 2350)	{if(iNeck_3Pro.bat1_level >= 3)		iNeck_3Pro.bat1_level = 3;}	//3.79V
@@ -161,11 +175,20 @@ static void app_task_cb(void *para, uint32_t evt)
 			}
 			else if(iNeck_3Pro.dev_status == LOW_PWR){
 				if(iNeck_3Pro.bat1_level < 1 || iNeck_3Pro.bat2_level < 1){
-//					Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
+					if(is_low_pwr_en == RESET){		
+						is_low_pwr_en = SET;
+						Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_9});
+					}
+				}
+			}
+
+			if(ADC_GetSample(BAT1TEMP_SAMPLE) < TEMP_60 || ADC_GetSample(BAT2TEMP_SAMPLE) < TEMP_60){	//>60℃
+				if(iNeck_3Pro.dev_status != DEV_ERROR){
+					iNeck_3Pro.dev_status = DEV_ERROR;
+					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_1|EVT_7});//关闭LED
+					Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
 					Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
 					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
-					Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
-					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_2|EVT_7});//关闭LED
 				}
 			}
 		}
@@ -181,6 +204,7 @@ static void app_task_cb(void *para, uint32_t evt)
 					iNeck_3Pro.dev_status == STOPPING){
 					break;
 				}
+				if(ADC_GetSample(BAT1TEMP_SAMPLE) < TEMP_60 && ADC_GetSample(BAT2TEMP_SAMPLE) < TEMP_60)		break;
 				if(iNeck_3Pro.dev_status == SLEEP && GPIO_ReadInputDataBit(GPIOB, GPIO_PIN_4) == SET){
 					iNeck_3Pro.dev_status = WORK;
 					Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_0});//启动按摩
@@ -196,6 +220,7 @@ static void app_task_cb(void *para, uint32_t evt)
 					else if(iNeck_3Pro.mass_motor2_speed == MID_SPEED)	iNeck_3Pro.mass_motor2_speed = FAST_SPEED;
 					else												iNeck_3Pro.mass_motor2_speed = MID_SPEED;
 					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_1});//短鸣N声
+					iNeck_3Pro.heart_cnt = HEART_CNT;
 				}
 			break;
 
@@ -203,13 +228,12 @@ static void app_task_cb(void *para, uint32_t evt)
 				if(iNeck_3Pro.dev_status == CHARGING || iNeck_3Pro.dev_status == CHARGDONE || iNeck_3Pro.dev_status == STOPPING){
 					break;
 				}
-				if(iNeck_3Pro.dev_status == WORK || iNeck_3Pro.dev_status == LOW_PWR){
-//					iNeck_3Pro.dev_status = SLEEP;
-//					Topic_Pushlish(MASS_TOPIC, &(uint32_t){EVT_1});//关闭按摩
+				if(iNeck_3Pro.dev_status == WORK || iNeck_3Pro.dev_status == LOW_PWR || iNeck_3Pro.dev_status == AGINGDONE){
 					Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_1});//关闭加热
 					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_2});//长鸣1声
 					Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
 					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_2|EVT_7});//关闭LED
+					iNeck_3Pro.heart_cnt = HEART_CNT;
 				}
 			break;
 
@@ -230,6 +254,13 @@ static void app_task_cb(void *para, uint32_t evt)
 					iNeck_3Pro.dev_status == STOPPING){
 					break;
 				}
+				//切换模式时，恢复往复运动
+				if(iNeck_3Pro.is_travel == RESET)		iNeck_3Pro.is_travel = SET;
+				if(iNeck_3Pro.is_manual_tra == SET)		iNeck_3Pro.is_manual_tra = RESET;
+				//重置速度
+				iNeck_3Pro.mass_motor1_speed = SLOW_SPEED;
+				iNeck_3Pro.mass_motor2_speed = SLOW_SPEED;
+				
 				if(iNeck_3Pro.mass_mode == NECK_SOOTH_MODE){
 					iNeck_3Pro.mass_mode = MASS_MODE;
 					iNeck_3Pro.heat_level = HEAT_NONE;
@@ -240,7 +271,9 @@ static void app_task_cb(void *para, uint32_t evt)
 					iNeck_3Pro.mass_mode = KNEAD_MODE;
 					iNeck_3Pro.heat_level = HEAT_NONE;
 				}
+				Topic_Pushlish(CHANGE_TOPIC, NULL);
 				Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});//短鸣1声
+				iNeck_3Pro.heart_cnt = HEART_CNT;
 			break;
 
 			case KEY_2_LONG:		//手动移位
@@ -248,9 +281,10 @@ static void app_task_cb(void *para, uint32_t evt)
 					iNeck_3Pro.dev_status == STOPPING){
 					break;
 				}
-				iNeck_3Pro.is_travel = RESET;
+				iNeck_3Pro.is_travel = SET;
 				iNeck_3Pro.is_manual_tra = SET;
 				Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});//短鸣1声
+				iNeck_3Pro.heart_cnt = HEART_CNT;
 			break;
 
 			case KEY_2_LONG_UP:		//手动移位停止
@@ -259,12 +293,12 @@ static void app_task_cb(void *para, uint32_t evt)
 					break;
 				}
 				iNeck_3Pro.is_travel = RESET;
-				iNeck_3Pro.is_manual_tra = RESET;
+				iNeck_3Pro.is_manual_tra = SET;
 			break;
 
 			case KEY_3_LONG:		//进老化
 				if(iNeck_3Pro.dev_status == CHARGING || iNeck_3Pro.dev_status == CHARGDONE || iNeck_3Pro.is_aging == SET || 
-					iNeck_3Pro.dev_status == STOPPING){
+					iNeck_3Pro.dev_status == STOPPING || iNeck_3Pro.dev_status == SLEEP){
 					break;
 				}
 				if(_7sec_cnt < 7){
@@ -276,7 +310,7 @@ static void app_task_cb(void *para, uint32_t evt)
 					Topic_Pushlish(HEAT_TOPIC, &(uint32_t){EVT_0});//开启加热
 					Topic_Pushlish(BLE_TOPIC, &(uint32_t){EVT_1});//关闭BLE
 					Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});//短鸣1声
-					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_3});//绿灯常亮
+					Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_8});//红绿灯1Hz交替闪烁
 				}
 			break;
 		}
@@ -294,53 +328,6 @@ void topic(int argc, char **argv)
 }
 SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 topic, topic, topic publish test);
-
-void get_psw(int argc, char **argv)
-{
-	if(atoi(argv[1]) == 0){
-		if(PSW1_DETECT == SET)	tiny_printf("psw1 is high.\r\n");
-		else					tiny_printf("psw1 is low.\r\n");
-	}else if(atoi(argv[1]) == 1){
-		if(PSW2_DETECT == SET)	tiny_printf("psw2 is high.\r\n");
-		else					tiny_printf("psw2 is low.\r\n");
-	}
-}
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
-get_psw, get_psw, get psw status);
-
-void mass_dir(int argc, char **argv)
-{
-	uint32_t dir = atoi(argv[1]);
-	if(dir == 0){
-		iNeck_3Pro.mass_motor1_dir = MASS_FORWARD;
-		iNeck_3Pro.mass_motor2_dir = MASS_FORWARD;
-	}else{
-		iNeck_3Pro.mass_motor1_dir = MASS_REVERSE;
-		iNeck_3Pro.mass_motor2_dir = MASS_REVERSE;
-	}
-}
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
-mass_dir, mass_dir, change mass dir);
-
-void mass_speed(int argc, char **argv)
-{
-	uint32_t speed = atoi(argv[1]);
-	if(speed == 0){
-		iNeck_3Pro.mass_motor1_speed = NONE_SPEED;
-		iNeck_3Pro.mass_motor2_speed = NONE_SPEED;
-	}else if(speed == 1){
-		iNeck_3Pro.mass_motor1_speed = SLOW_SPEED;
-		iNeck_3Pro.mass_motor2_speed = SLOW_SPEED;
-	}else if(speed == 2){
-		iNeck_3Pro.mass_motor1_speed = MID_SPEED;
-		iNeck_3Pro.mass_motor2_speed = MID_SPEED;
-	}else{
-		iNeck_3Pro.mass_motor1_speed = FAST_SPEED;
-		iNeck_3Pro.mass_motor2_speed = FAST_SPEED;
-	}
-}
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
-mass_speed, mass_speed, change mass speed);
 
 void re_boot(void)
 {
@@ -388,6 +375,7 @@ void topic_init(void)
 	Topic_Init(MOTOR_TOPIC, NULL, NULL);
 	Topic_Init(BLE_TOPIC, NULL, NULL);
 	Topic_Init(MASS_TOPIC, NULL, NULL);
+	Topic_Init(CHANGE_TOPIC, NULL, NULL);
 }
 app_initcall(topic_init);
 
@@ -402,7 +390,8 @@ int main(void)
 	__disable_irq();
 	do_init_call();
 	__enable_irq();
-	tiny_printf("software version:%s", SOFTWARE_VERSION);
+	tiny_printf("software version:"SOFTWARE_VERSION"\r\n");
+//	cm_backtrace_init("project", "V1.0", "V1.0");
 	while(1)
 	{
 		tiny_task_loop();

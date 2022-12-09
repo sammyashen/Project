@@ -8,7 +8,7 @@ static struct state_machine ble_fsm;
 static struct state ble_idle, ble_pwr_on, ble_init, ble_pwr_off;
 static struct state ble_init_idle, ble_init_bleCFG, ble_init_getMAC, ble_init_setADV, ble_init_createSRV;
 static struct state ble_init_startSRV, ble_init_setMSG, ble_init_sppCFG, ble_init_startADV, ble_init_waitNotify;
-static struct state ble_init_setSPP, ble_init_spp, ble_init_enterCMD, ble_init_stopADV;
+static struct state ble_init_setSPP, ble_init_spp, ble_init_enterCMD, ble_init_stopADV, ble_init_waitConn, ble_init_disConn;
 
 static bool ble_evt_compare(void *key, struct event *event)
 {
@@ -183,10 +183,12 @@ static struct state ble_init_getMAC = {
 
 static void ble_init_setADV_entery(void *state_data, struct event *event)
 {
-	uint8_t ble_name[10] = "iNeck 3Pro";
+	uint8_t ble_name[21] = "Breo_iNeck 3 Pro_BLE";
 	uint8_t ble_adv[80] = {0};
 
-	sprintf((char *)ble_adv, "AT+BLEADVDATAEX=\"%s_%s\",\"00FF\",\"112233445566\",1\r\n", ble_name, BLEMAC_L3str);
+//	sprintf((char *)ble_adv, "AT+BLEADVDATAEX=\"%s_%s\",\"00FF\",\"112233445566\",1\r\n", ble_name, BLEMAC_L3str);
+	sprintf((char *)ble_adv, "AT+BLEADVDATAEX=\"%s\",\"00FF\",\"1122334455\",1\r\n", ble_name);
+//	sprintf((char *)ble_adv, "AT+BLENAME=\"%s\"\r\n", ble_name);
 	uart_write(DEV_UART4, ble_adv, strlen((char *)ble_adv));
 }
 static void ble_init_setADV_process(void *oldstate_data, struct event *event, void *state_new_data)
@@ -353,13 +355,13 @@ static struct state ble_init_startADV = {
 	.state_parent = &ble_init,
 	.transitions = (struct transition[]){
 		{BLE_EVT, (void *)"hold", ble_evt_compare, &ble_init_startADV_process, &ble_init_startADV}, 
-		{BLE_EVT, (void *)"change", ble_evt_compare, NULL, &ble_init_waitNotify},
+		{BLE_EVT, (void *)"change", ble_evt_compare, NULL, &ble_init_waitConn},
 	},
 	.transition_nums = 2,
 	.action_entry = &ble_init_startADV_entery,
 };
 
-static void ble_init_waitNotify_process(void *oldstate_data, struct event *event, void *state_new_data)
+static void ble_init_waitConn_process(void *oldstate_data, struct event *event, void *state_new_data)
 {
 	uint8_t size = 0;
 	uint8_t buf[256] = {0};
@@ -367,10 +369,48 @@ static void ble_init_waitNotify_process(void *oldstate_data, struct event *event
 	size = uart_read(DEV_UART4, buf, 256);
 	if(size != 0){
 		for(uint8_t i=0;i<size;i++){			
-			if(buf[i] == 'W' && buf[i+4] == 'E'){			//got "+WRITE:0,1,6,1,2"
+			if(buf[i] == 'B' && buf[i+3] == 'C'){			//got "+BLECONN"
 				tiny_set_event(&ble_fsm_task, EVT_3);
 				break;
 			}
+		}
+	}
+}
+static struct state ble_init_waitConn = {	   
+	.state_parent = &ble_init,
+	.transitions = (struct transition[]){
+		{BLE_EVT, (void *)"hold", ble_evt_compare, &ble_init_waitConn_process, &ble_init_waitConn}, 
+		{BLE_EVT, (void *)"change", ble_evt_compare, NULL, &ble_init_waitNotify},
+	},
+	.transition_nums = 2,
+};
+
+static uint8_t notify_timeout = 0;
+static void ble_init_waitNotify_entery(void *state_data, struct event *event)
+{
+	notify_timeout = 0;
+}
+static void ble_init_waitNotify_process(void *oldstate_data, struct event *event, void *state_new_data)
+{
+	uint8_t size = 0;
+	uint8_t buf[256] = {0};
+
+	size = uart_read(DEV_UART4, buf, 256);
+	if(size != 0){
+		notify_timeout = 0;
+		for(uint8_t i=0;i<size;i++){			
+			if(buf[i] == 'W' && buf[i+4] == 'E'){			//got "+WRITE:0,1,6,1,2"
+				tiny_set_event(&ble_fsm_task, EVT_3);
+				break;
+			}else if(buf[i] == 'B' && buf[i+3] == 'D'){		//got "+BLEDISCONN"
+				tiny_set_event(&ble_fsm_task, EVT_5);
+				break;
+			}
+		}
+	}else{
+		if(++notify_timeout >= 100){	//waiting 10s
+			notify_timeout = 0;
+			tiny_set_event(&ble_fsm_task, EVT_4);
 		}
 	}
 }
@@ -379,8 +419,11 @@ static struct state ble_init_waitNotify = {
 	.transitions = (struct transition[]){
 		{BLE_EVT, (void *)"hold", ble_evt_compare, &ble_init_waitNotify_process, &ble_init_waitNotify}, 
 		{BLE_EVT, (void *)"change", ble_evt_compare, NULL, &ble_init_setSPP},
+		{BLE_EVT, (void *)"timeout", ble_evt_compare, NULL, &ble_init_disConn},
+		{BLE_EVT, (void *)"re_adv", ble_evt_compare, NULL, &ble_init_stopADV},
 	},
-	.transition_nums = 2,
+	.transition_nums = 4,
+	.action_entry = &ble_init_waitNotify_entery,
 };
 
 static void ble_init_setSPP_entery(void *state_data, struct event *event)
@@ -468,6 +511,7 @@ static void ble_notify_handshake(void)
 	uart_write(DEV_UART4, frame, 18);
 }
 
+#define MIN(X, Y)	((X < Y) ? (X) : (Y))
 static void ble_heart_pack_notify(void)
 {
 	uint8_t frame[30] = {0};
@@ -479,24 +523,24 @@ static void ble_heart_pack_notify(void)
 	frame[4] = 0x00;
 	frame[5] = 0xFF;
 	frame[6] = 0x69;
-	frame[7] = 0x0C;
+	frame[7] = 0x0D;
 	frame[8] = iNeck_3Pro.mass_mode;
-	frame[9] = (iNeck_3Pro.mass_remain/60);
-	frame[10] = iNeck_3Pro.heat_level;
-	frame[11] = iNeck_3Pro.bat1_level;
-	frame[12] = iNeck_3Pro.bat2_level;
+	frame[9] = (uint8_t)(iNeck_3Pro.mass_remain>>8);
+	frame[10] = (uint8_t)(iNeck_3Pro.mass_remain);
+	frame[11] = iNeck_3Pro.heat_level;
+	frame[12] = MIN(iNeck_3Pro.bat1_level, iNeck_3Pro.bat2_level);
+	if(frame[12] > 4) frame[12] = 4;
+	frame[12] = frame[12] + 1;
 	if(iNeck_3Pro.is_travel)	frame[13] = 0x01;
 	else						frame[13] = 0x00;
 	frame[14] = iNeck_3Pro.mass_motor1_speed;
 	frame[15] = iNeck_3Pro.mass_motor2_speed;
 	frame[16] = iNeck_3Pro.mass_motor1_dir;
 	frame[17] = iNeck_3Pro.mass_motor2_dir;
-	frame[18] = 0x00;
-	frame[19] = 0x00;
-	frame[20] = checksum(&frame[1], 19);
-	frame[21] = FRAME_TAIL;
+	frame[18] = checksum(&frame[1], 17);
+	frame[19] = FRAME_TAIL;
 
-	uart_write(DEV_UART4, frame, 22);
+	uart_write(DEV_UART4, frame, 20);
 }
 
 static void ble_set_frame_process(uint8_t *frame)
@@ -505,27 +549,44 @@ static void ble_set_frame_process(uint8_t *frame)
 
 	switch(frame[i])
 	{
+		case 0x01:	//握手
+			ble_notify_handshake();
+			iNeck_3Pro.is_handshake = SET;
+		break;
+	
 		case 0x09:
 		break;
 
 		case 0x40:	//时间设置
-			if(frame[2] != 0x00){
-				iNeck_3Pro.mass_time = frame[3]*60;
-				iNeck_3Pro.mass_remain = iNeck_3Pro.mass_time;
-			}
+			iNeck_3Pro.mass_time = frame[3]*60;
+			iNeck_3Pro.mass_remain = iNeck_3Pro.mass_time;
+			iNeck_3Pro.heart_cnt = HEART_CNT;
+			Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});
 		break;
 
 		case 0x56:	//模式设置
-			if(frame[2] == 0x00){
-				iNeck_3Pro.mass_mode = MASS_MODE;
-				iNeck_3Pro.heat_level = HEAT_NONE;
-			}else if(frame[2] == 0x01){
-				iNeck_3Pro.mass_mode = KNEAD_MODE;
-				iNeck_3Pro.heat_level = HEAT_NONE;
-			}else if(frame[2] == 0x02){
-				iNeck_3Pro.mass_mode = NECK_SOOTH_MODE;
-				iNeck_3Pro.heat_level = HEAT_WARM;
+			if(frame[2] != iNeck_3Pro.mass_mode){	
+				//切换模式时，恢复往复运动
+				if(iNeck_3Pro.is_travel == RESET)		iNeck_3Pro.is_travel = SET;
+				if(iNeck_3Pro.is_manual_tra == SET)		iNeck_3Pro.is_manual_tra = RESET;
+				//重置速度
+				iNeck_3Pro.mass_motor1_speed = SLOW_SPEED;
+				iNeck_3Pro.mass_motor2_speed = SLOW_SPEED;
+				
+				if(frame[2] == 0x00){
+					iNeck_3Pro.mass_mode = MASS_MODE;
+					iNeck_3Pro.heat_level = HEAT_NONE;
+				}else if(frame[2] == 0x01){
+					iNeck_3Pro.mass_mode = KNEAD_MODE;
+					iNeck_3Pro.heat_level = HEAT_NONE;
+				}else if(frame[2] == 0x02){
+					iNeck_3Pro.mass_mode = NECK_SOOTH_MODE;
+					iNeck_3Pro.heat_level = HEAT_WARM;
+				}
+				Topic_Pushlish(CHANGE_TOPIC, NULL);
 			}
+			iNeck_3Pro.heart_cnt = HEART_CNT;
+			Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});
 		break;
 
 		case 0x59:	//电机设置
@@ -538,10 +599,20 @@ static void ble_set_frame_process(uint8_t *frame)
 				else					iNeck_3Pro.mass_motor2_dir = MASS_REVERSE;
 				iNeck_3Pro.mass_motor2_speed = frame[2];
 			}else if(frame[3] == 0x30){
-				if(frame[4] == 0x01)	iNeck_3Pro.mass_motor3_dir = MASS_FORWARD;
-				else					iNeck_3Pro.mass_motor3_dir = MASS_REVERSE;
-				iNeck_3Pro.mass_motor3_speed = frame[2];
+				if(frame[2] == 0x00){	//关闭往复运动
+					if(iNeck_3Pro.is_travel == SET){
+						iNeck_3Pro.is_travel = RESET;
+						iNeck_3Pro.is_manual_tra = SET;
+					}
+				}else{
+					if(iNeck_3Pro.is_travel == RESET){
+						iNeck_3Pro.is_travel = SET;
+						iNeck_3Pro.is_manual_tra = RESET;
+					}
+				}
 			}
+			iNeck_3Pro.heart_cnt = HEART_CNT;
+			Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});
 		break;
 
 		case 0x51:	//加热设置
@@ -550,6 +621,8 @@ static void ble_set_frame_process(uint8_t *frame)
 			}else{
 				iNeck_3Pro.heat_level = HEAT_NONE;
 			}
+			iNeck_3Pro.heart_cnt = HEART_CNT;
+			Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});
 		break;
 
 		default:
@@ -565,11 +638,12 @@ static void ble_init_spp_process(void *oldstate_data, struct event *event, void 
 
 	size = uart_read(DEV_UART4, buf, 256);
 	if(size != 0){			
-		if(buf[0] == '+' && buf[1] == 'B'){
-			if(buf[4] == 'C'){		//BLE CONN
+		if(buf[0] == '+' && buf[1] == 'B' && buf[2] == 'L' && buf[3] == 'E'){
+			if(buf[4] == 'C' && buf[5] == 'O' && buf[6] == 'N'){		//got "+BLECONN"
 				iNeck_3Pro.ble_status = CONNECTED;
 				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_5});
-			}else if(buf[4] == 'D'){	//BLE DISCONN
+			}else if(buf[4] == 'D' && buf[5] == 'I' && buf[6] == 'S'){	//got "+BLEDISCONN"
+				iNeck_3Pro.is_handshake = RESET;
 				iNeck_3Pro.ble_status = DISCONNECTED;
 				Topic_Pushlish(LED_TOPIC, &(uint32_t){EVT_4});
 				tiny_set_event(&ble_fsm_task, EVT_3);
@@ -579,20 +653,14 @@ static void ble_init_spp_process(void *oldstate_data, struct event *event, void 
 			//蓝牙数据解包:帧头[0]+版本信息[1]+设备类型[2]+命令字[3]+数据包序列号[4]+应答标志[5]+数据信息[6、7、、、N]+
 			//和校验[N+1]+帧尾[N+2]
 			if(buf[3] != 0x01 && buf[3] != 0x02){		//命令字错误
-				if((buf[0]==0x4E)&&(buf[1]==0xff)&&(buf[2]==0xff)&&(buf[3]==0xff)&&(buf[4]==0xff)&&(buf[5]==0xff)&&(buf[6]==0x01)){
-					ble_notify_handshake();
-				}
-				else{
-					ble_frame_pack(frame, buf[3], CMD_ERR, &buf[6], (size - 8));
-					uart_write(DEV_UART4, frame, size);
-				}
+				ble_frame_pack(frame, buf[3], CMD_ERR, &buf[6], (size - 8));
+				uart_write(DEV_UART4, frame, size);
 			}
-			else if(buf[size - 2] != checksum(&buf[1], (size - 2))){	//校验错误
+			else if(buf[size - 2] != checksum(&buf[1], (size - 3))){	//校验错误
 				ble_frame_pack(frame, buf[3], SUM_ERR, &buf[6], (size - 8));
 				uart_write(DEV_UART4, frame, size);
 			}
 			else{
-				Topic_Pushlish(BUZZER_TOPIC, &(uint32_t){EVT_0});
 				ble_set_frame_process(&buf[6]);
 			}
 		}
@@ -628,6 +696,29 @@ static struct state ble_init_enterCMD = {
 	},
 	.transition_nums = 2,
 	.action_entry = &ble_init_enterCMD_entery,
+};
+
+static void ble_init_disConn_entery(void *state_data, struct event *event)
+{
+	BLE_PWR_DISABLE;
+}
+static void ble_init_disConn_process(void *oldstate_data, struct event *event, void *state_new_data)
+{
+	static uint8_t delay = 0;
+
+	if(++delay >= 5){
+		delay = 0;
+		tiny_set_event(&ble_fsm_task, EVT_3);
+	}
+}
+static struct state ble_init_disConn = {	   
+	.state_parent = &ble_init,
+	.transitions = (struct transition[]){
+		{BLE_EVT, (void *)"hold", ble_evt_compare, &ble_init_disConn_process, &ble_init_disConn}, 
+		{BLE_EVT, (void *)"change", ble_evt_compare, NULL, &ble_pwr_on},
+	},
+	.transition_nums = 2,
+	.action_entry = &ble_init_disConn_entery,
 };
 
 static void ble_init_stopADV_entery(void *state_data, struct event *event)
@@ -698,6 +789,8 @@ static void ble_task_cb(void *para, uint32_t evt)
  *EVT_1：send "stop"
  *EVT_2: send "hold"
  *EVT_3: send "change"
+ *EVT_4: send "timeout"
+ *EVT_5: send "re_adv"
  */
  static void ble_fsm_task_cb(void *para, uint32_t evt)
  {
@@ -717,6 +810,14 @@ static void ble_task_cb(void *para, uint32_t evt)
 	if(evt & EVT_3){
 		tiny_clr_event(&ble_fsm_task, EVT_3);
 		statem_handle_event(&ble_fsm, &(struct event){BLE_EVT, (void *)"change"});
+	}
+	if(evt & EVT_4){
+		tiny_clr_event(&ble_fsm_task, EVT_4);
+		statem_handle_event(&ble_fsm, &(struct event){BLE_EVT, (void *)"timeout"});
+	}
+	if(evt & EVT_5){
+		tiny_clr_event(&ble_fsm_task, EVT_5);
+		statem_handle_event(&ble_fsm, &(struct event){BLE_EVT, (void *)"re_adv"});
 	}
 
 	uart_poll_dma_tx(DEV_UART4);

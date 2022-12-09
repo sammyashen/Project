@@ -3,7 +3,7 @@
  static task_t motor_task;
  static task_t motor_fsm_task;
 
- const static uint16_t motor_tra_pwm[2] = {0, 6000};
+ const static uint16_t motor_tra_pwm[2] = {0, 8000};
  const static uint16_t motor_pwm[4] = {0, 6000, 7000, 8000};
  static motor_t motor1, motor2, motor3;
 
@@ -746,10 +746,6 @@ static struct state motor_3s_stop = {
 	 uint32_t *evt = (uint32_t *)msg;
 
 	 tiny_set_event(&motor_task, *evt);
-//	 tiny_printf("evt:%d\r\n", *evt);
-//	 if((*evt) & EVT_6)			tiny_printf("get EVT_6\r\n");
-//	 else if((*evt) & EVT_8)	tiny_printf("get EVT_8\r\n");
-//	 else if((*evt) & EVT_7)	tiny_printf("get EVT_7\r\n");
  }
  
  static void motor_device_init(void)
