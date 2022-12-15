@@ -1,0 +1,17 @@
+//拉取远端分支代码
+1、将本地的文件夹初始化为一个git仓库：git init
+2、与远程仓库建立连接：git remote add origin http://xxxx/.git(远程仓库的地址)
+3、把远程分支拉取到本地：git fetch origin dev(远程分支名)
+4、查看当前文件修改状态：git status
+5、本地建立一个分支，分支名与远程的一样 ：git checkout -b dev(分支名)
+6、把远程指定的分支拉取到本地：git pull origin dev(远程分支名)
+
+7、将本地修改文件添加到本地git缓存区中：git add .  或者 git add xxx
+8、提交修改到本地git库中：git commit -m "修复XXbug"
+9、把当前提交到git本地仓库的代码推送到远程主机origin的mybranch分支上：git push origin mybranch
+10、查看本地所有分支：git branch -a
+11、切换本地已有分支：git checkout dev(本地分支)
+12、删除本地已有分支：git branch -D dev(本地分支)
+13、查看远端所有分支：git branch -r
+14、删除远端分支：git push origin --delete tmp(远端分支) 
+15、回退n次commit：git reset --soft HEAD~n
